@@ -1,0 +1,24 @@
+RL_Paint
+9|This plugin draws a line from the tip of your car to help you visualize what is going on when using directional air roll
+8|
+1|Enabled|paint_enabled
+7|
+1|Trailing|paint_trailing
+7|
+1|Draw start point|paint_visualize_start_point
+5|Points|paint_points|20|10000
+7|
+9|-  120 points makes just below a circle when trailing
+5|Start Point|paint_start_point|-300|300
+7|
+9|-  74 is just in front of a octane car.
+9|Tip: You can ctrl+click the slider to set a specific number
+8|
+0|Freeze|paint_freeze
+7|
+9|Teleports you to the middle of the field with -1 gravity and 0 velocity.
+0|Restore gravity to default|sv_soccar_gravity -650
+9|
+0|Refresh settings|cl_settings_refreshplugins
+8|
+9|Created by Zintriz
