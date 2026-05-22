@@ -1,25 +1,34 @@
 ﻿#include "RL_Paint.h"
 
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.1.0", PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.1.1", PLUGINTYPE_FREEPLAY)
 
 void RL_Paint::onLoad()
 {
     this->Log("RL_Paint Loaded");
+
     enabled = std::make_shared<bool>(true);
     cvarManager->registerCvar("paint_enabled", "1", "Enable/Disable RL_Paint")
         .bindTo(enabled);
+
     points_max = std::make_shared<int>(120);
     cvarManager->registerCvar("paint_points", "120", "Painted points before reset",true,true,20,true,9999)
         .bindTo(points_max);
-    // need to make this a mode shift instead
-    trailing = std::make_shared<bool>(true);
+
+    trailing = std::make_shared<bool>(true); // will be replaced by mode
     cvarManager->registerCvar("paint_trailing", "1", "Trailing tail.")
         .bindTo(trailing);
+    mode = std::make_shared<int>(0); 
+    cvarManager->registerCvar("paint_mode", "0", "0 = trailning, 1 = on_reset, 2 = on_pointcap.")
+        .bindTo(mode);
+    cvarManager->getCvar("paint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        ClearPoints();
+    });
 
     start_point = std::make_shared<int>(74);
     cvarManager->registerCvar("paint_start_point", "74", "The start point of the trail", true, true, -300, true, 300)
         .bindTo(start_point);
+
     visualize_start_point = std::make_shared<bool>(false);
     cvarManager->registerCvar("paint_visualize_start_point", "0", "Vizualize the start point")
         .bindTo(visualize_start_point);
@@ -55,23 +64,28 @@ void RL_Paint::LoadHooks()
 {
     gameWrapper->HookEvent("Function TAGame.EngineShare_TA.EventPostPhysicsStep",
         [this](std::string eventName) {
-            if (enabled && start_point && !*enabled) return;
-            this->GetPointInFront(*start_point);
+            if (enabled && start_point && mode && !*enabled) return;
+            this->GetPointInFront(*start_point, *mode);
         });
     gameWrapper->HookEvent("Function TAGame.Car_TA.EventPerformedFlipReset",
         [this](std::string eventName) {
             if (!*enabled) return;
             this->FlipReset();
         });
+    gameWrapper->HookEvent("Function TAGame.Car_TA.OnHitBall",
+        [this](std::string eventName) {
+            if (!*enabled) return;
+            this->BallHit();
+        });
     gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed",
         [this](std::string eventName) {
             if (!*enabled) return;
             this->ClearPoints();
         });
-    gameWrapper->HookEvent("Function TAGame.Car_TA.OnHitBall",
+    gameWrapper->HookEvent("Function GameEvent_Soccar_TA.Countdown.BeginState",
         [this](std::string eventName) {
             if (!*enabled) return;
-            this->BallHit();
+            this->ClearPoints();
         });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
@@ -214,20 +228,28 @@ void RL_Paint::AddPoints(Vector p) {
     points.push_back(p);
 }
 
-void RL_Paint::GetPointInFront(int startPoint) {
+void RL_Paint::GetPointInFront(int startPoint, int mode) {
     //if (!IsValidGameState()) return;
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
     Vector v = car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = this->RotatePointWithCar(Vector(startPoint, 0, 0), v, r);
-
+    switch (mode) {
+        case TRAILING:
+            DeleteTrailing();
+            break;
+        case ON_RESET:
+            break;
+        case ON_POINTRESET:
+            if ((int)points.size() > *points_max) {
+                this->ClearPoints();
+            }
+            break;
+        default:
+            DeleteTrailing();
+    };
     // Delete Points if needed
-    if (!*trailing && ((int)points.size() > *points_max)) {
-        this->ClearPoints();
-    } else {
-        this->DeleteTrailing();
-    }
 
     // Add new points
     this->AddPoints(rp);

@@ -4,7 +4,12 @@
 #include "Objects/Sphere.h"
 #include "Objects/Frustum.h"
 
-
+enum modes
+{
+	TRAILING,
+	ON_RESET,
+	ON_POINTRESET,
+};
 class RL_Paint : public BakkesMod::Plugin::BakkesModPlugin
 {
 public:
@@ -17,7 +22,7 @@ public:
 	void DrawFlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation);
 	void DrawStartPoint(int p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation);
 	void CalculatePairs();
-	void ClearPoints();
+	void ClearPoints();	
 	void BallHit();
 	void AddPoints(Vector p);
 	void DeleteTrailing();
@@ -25,7 +30,7 @@ public:
 	Vector RotatePointWithCar(Vector offset, Vector carLocation, Rotator carRotation);
 	bool IsValidGameState();
 	bool HasResetIntervalElapsed();
-	void GetPointInFront(int startPoint);
+	void GetPointInFront(int startPoint, int mode);
 	void Freeze(Vector v);
 
 
@@ -39,6 +44,7 @@ public:
 	std::shared_ptr<bool> enabled;
 	std::shared_ptr<int> points_max; //134 points is a circle
 	std::shared_ptr<bool> trailing;
+	std::shared_ptr<int> mode;
 
 	std::shared_ptr<int> start_point;
 	std::shared_ptr<bool> visualize_start_point;
