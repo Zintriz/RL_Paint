@@ -15,9 +15,6 @@ void RL_Paint::onLoad()
     cvarManager->registerCvar("paint_points", "120", "Painted points before reset",true,true,20,true,9999)
         .bindTo(points_max);
 
-    trailing = std::make_shared<bool>(true); // will be replaced by mode
-    cvarManager->registerCvar("paint_trailing", "1", "Trailing tail.")
-        .bindTo(trailing);
     mode = std::make_shared<int>(0); 
     cvarManager->registerCvar("paint_mode", "0", "0 = trailning, 1 = on_reset, 2 = on_pointcap.")
         .bindTo(mode);
@@ -25,8 +22,8 @@ void RL_Paint::onLoad()
         ClearPoints();
     });
 
-    start_point = std::make_shared<int>(74);
-    cvarManager->registerCvar("paint_start_point", "74", "The start point of the trail", true, true, -300, true, 300)
+    start_point = std::make_shared<int>(80);
+    cvarManager->registerCvar("paint_start_point", "80", "The start point of the trail", true, true, -300, true, 300)
         .bindTo(start_point);
 
     visualize_start_point = std::make_shared<bool>(false);

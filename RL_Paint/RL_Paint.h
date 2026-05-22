@@ -43,7 +43,6 @@ public:
 
 	std::shared_ptr<bool> enabled;
 	std::shared_ptr<int> points_max; //134 points is a circle
-	std::shared_ptr<bool> trailing;
 	std::shared_ptr<int> mode;
 
 	std::shared_ptr<int> start_point;
