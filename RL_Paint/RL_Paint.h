@@ -8,7 +8,7 @@ enum modes
 {
 	TRAILING,
 	ON_RESET,
-	ON_POINTRESET,
+	ON_POINTRESET
 };
 class RL_Paint : public BakkesMod::Plugin::BakkesModPlugin
 {
@@ -19,6 +19,7 @@ public:
 	void LoadHooks();
 	void Render(CanvasWrapper canvas);
 	void DrawBallHit(Vector p, CanvasWrapper canvas, RT::Frustum frust);
+	void DrawLine(Vector v1, Vector v2, bool relativeToCar, CanvasWrapper canvas, RT::Frustum frust);
 	void DrawFlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation);
 	void DrawStartPoint(int p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation);
 	void CalculatePairs();
@@ -39,11 +40,15 @@ public:
 	std::vector<Vector> points_flipreset;
 	std::vector<Vector> points_ballhit;
 
+	std::vector<Rotator> points_rotation;
 
 
 	std::shared_ptr<bool> enabled;
+
 	std::shared_ptr<int> points_max; //134 points is a circle
 	std::shared_ptr<int> mode;
+	std::shared_ptr<bool> relative;
+
 
 	std::shared_ptr<int> start_point;
 	std::shared_ptr<bool> visualize_start_point;

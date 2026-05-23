@@ -1,7 +1,7 @@
 ﻿#include "RL_Paint.h"
 
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.1.1", PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.2.2", PLUGINTYPE_FREEPLAY)
 
 void RL_Paint::onLoad()
 {
@@ -21,7 +21,12 @@ void RL_Paint::onLoad()
     cvarManager->getCvar("paint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         ClearPoints();
     });
-
+    relative = std::make_shared<bool>(true);
+    cvarManager->registerCvar("paint_relative", "1", "If true, dots line follows the car instead of worldspace")
+        .bindTo(relative);
+    cvarManager->getCvar("paint_relative").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        ClearPoints();
+        });
     start_point = std::make_shared<int>(80);
     cvarManager->registerCvar("paint_start_point", "80", "The start point of the trail", true, true, -300, true, 300)
         .bindTo(start_point);
@@ -29,7 +34,6 @@ void RL_Paint::onLoad()
     visualize_start_point = std::make_shared<bool>(false);
     cvarManager->registerCvar("paint_visualize_start_point", "0", "Vizualize the start point")
         .bindTo(visualize_start_point);
-
 
     cvarManager->registerNotifier("paint_freeze", [this](std::vector<std::string> args) {
         Freeze(Vector(0, 0, 300));
@@ -144,6 +148,8 @@ bool RL_Paint::IsValidGameState()
 
     return true;
 }
+
+
 void RL_Paint::Render(CanvasWrapper canvas) {
     if (!IsValidGameState())
         return;
@@ -158,8 +164,10 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     if (camera.IsNull()) return;
     RT::Frustum frust{ canvas, camera };
     if (pairs.empty()) return;
+    CarWrapper car = gameWrapper->GetLocalCar();
+    if (!car) return;
     for (auto p : pairs) {
-        RT::Line(p.first, p.second).DrawWithinFrustum(canvas, frust);
+        DrawLine(p.first, p.second, *relative, canvas, frust);
     }
     for (Vector p : points_ballhit) {
         DrawBallHit(p, canvas, frust);
@@ -177,8 +185,13 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     //this->Log(std::format("new vector = {} {} {}", rotatedVector.X, rotatedVector.Y, rotatedVector.Z));
 
     
-    //this->Log(std::format("X: {}",RotatorToQuat(car.GetRotation()).));
-    
+    //this->Log(std::format("X: {}",RotatorToQuats(car.GetRotation()).));
+ 
+    //Vector v1 = RotatePointWithCar(Vector(80, 50, 0),Vector(0,0,0), car.GetRotation());
+    //Vector v2 = RotatePointWithCar(Vector(80, 0, 0), Vector(0,0,0), car.GetRotation());
+    //this->Log(std::format("xyz: {} {} {}", v1.X, v1.Y, v1.Z));
+    //RT::Line(v1,v2).DrawWithinFrustum(canvas, frust);
+   
     //RT::Sphere(cl, RotatorToQuat(r) * Quat(0.71,0,0.71,0), 50).Draw(canvas, frust, camera.GetLocation(), 30);
 
 
@@ -188,6 +201,17 @@ void RL_Paint::DrawBallHit(Vector p, CanvasWrapper canvas, RT::Frustum frust) {
     Vector up = Vector(p.X, p.Y, p.Z + 5);
     Vector down = Vector(p.X, p.Y, p.Z - 5);
     RT::Line(up, down).DrawWithinFrustum(canvas, frust);
+}
+void RL_Paint::DrawLine(Vector v1, Vector v2, bool relativeToCar, CanvasWrapper canvas, RT::Frustum frust)
+{
+    if (relativeToCar) {
+        CarWrapper car = gameWrapper->GetLocalCar();
+        if (!car) return;
+        RT::Line(v1+car.GetLocation(), v2+car.GetLocation()).DrawWithinFrustum(canvas, frust);
+    } else {
+        RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
+    }
+    
 }
 void RL_Paint::DrawFlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
     RT::Sphere(p, 50).Draw(canvas, frust, cameraLocation, 10);
@@ -229,7 +253,7 @@ void RL_Paint::GetPointInFront(int startPoint, int mode) {
     //if (!IsValidGameState()) return;
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
-    Vector v = car.GetLocation();
+    Vector v = *relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = this->RotatePointWithCar(Vector(startPoint, 0, 0), v, r);
     switch (mode) {
@@ -283,6 +307,7 @@ void RL_Paint::Freeze(Vector v) {
     car.SetVelocity(0);
     car.SetRotation(0);
 }
+
 
 Vector RL_Paint::RotatePointWithCar(Vector offset,Vector carLocation, Rotator carRotation) // direct copy of hitbox plugin
 {

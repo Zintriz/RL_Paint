@@ -4,6 +4,7 @@ RL_Paint
 1|Enabled|paint_enabled
 7|
 1|Draw start point|paint_visualize_start_point
+1|Relative Mode|paint_relative
 6|Mode|paint_mode|Trailing@0&Never@1&Max Points@2
 5|Points|paint_points|20|10000
 7|
