@@ -220,11 +220,10 @@ void RL_Paint::DrawFlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, 
 void RL_Paint::DrawStartPoint(int p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
-    Vector v = RotatePointWithCar(Vector((float) p, 0, 0), car.GetLocation(), car.GetRotation());
-    RT::Sphere(v, 5).Draw(canvas, frust, cameraLocation, 10);
-    Vector up = v + Vector(0, 0, 15);
-    Vector down = v + Vector(0, 0, -15);
-    RT::Line(up, down).DrawWithinFrustum(canvas, frust);
+    Vector v1 = RotatePointWithCar(Vector((float) p, 0, 0), car.GetLocation(), car.GetRotation());
+    Vector v2 = RotatePointWithCar(Vector((float)p, -10, 0), car.GetLocation(), car.GetRotation());
+    RT::Sphere(v1, 2).Draw(canvas, frust, cameraLocation, 10);
+    RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
 }
 
 bool RL_Paint::HasResetIntervalElapsed() {
