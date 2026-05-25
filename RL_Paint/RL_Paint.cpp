@@ -1,7 +1,8 @@
 ﻿#include "RL_Paint.h"
-
+#include "Draw.h"
 
 BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.2.2", PLUGINTYPE_FREEPLAY)
+LinearColor colors(255, 255, 0, 255);
 
 void RL_Paint::onLoad()
 {
@@ -98,24 +99,19 @@ void RL_Paint::LoadHooks()
             BallWrapper ballHit = BallWrapper(hitParams->ball);
             Vector v = Vector(hitParams->HitLocation);
             this->BallHit(v);
-            // Now you know what ball was hit!
         });
 
     gameWrapper->HookEvent("Function TAGame.EngineShare_TA.EventPostPhysicsStep",
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
-            this->GetPointInFront(*start_point, *mode);
+            this->AddDrawPoint(*start_point, *mode);
         });
     gameWrapper->HookEvent("Function TAGame.Car_TA.EventPerformedFlipReset",
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
             this->FlipReset();
         });
-    //gameWrapper->HookEvent("Function TAGame.Car_TA.OnHitBall",
-    //    [this](std::string eventName) {
-    //        if (!enabled || !*show_ballhits) return;
-    //        this->BallHit();
-    //    });
+
     gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed",
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
@@ -125,12 +121,16 @@ void RL_Paint::LoadHooks()
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
             this->ClearPoints();
+
+
         });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
             if (!enabled || !*enabled) return;
             Render(canvas);
         });
+
+
 }
 
 void RL_Paint::Log(std::string msg)
@@ -183,46 +183,19 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
     for (auto p : pairs) {
-        DrawLine(p.first, p.second, *relative, canvas, frust);
+        Draw::Line(p.first, p.second, car, *relative, canvas, frust);
     }
     for (Vector p : points_ballhit) {
-        DrawBallHit(p, canvas, frust);
+        Draw::BallHit(p, canvas, frust);
     }
     for (Vector fr : points_flipreset) {
-        DrawFlipReset(fr, canvas, frust, camera.GetLocation());
+        Draw::FlipReset(fr, canvas, frust, camera.GetLocation());
     }
     if (visualize_start_point && start_point && *visualize_start_point) {
-        DrawStartPoint(*start_point, canvas, frust, camera.GetLocation());
+        Draw::StartPoint(*start_point, car, canvas, frust, camera.GetLocation());
     }
-}
-void RL_Paint::DrawBallHit(Vector p, CanvasWrapper canvas, RT::Frustum frust) {
-    Vector up = Vector(p.X, p.Y, p.Z + 5);
-    Vector down = Vector(p.X, p.Y, p.Z - 5);
-    RT::Line(up, down).DrawWithinFrustum(canvas, frust);
-}
-void RL_Paint::DrawLine(Vector v1, Vector v2, bool relativeToCar, CanvasWrapper canvas, RT::Frustum frust)
-{
-    if (relativeToCar) {
-        CarWrapper car = gameWrapper->GetLocalCar();
-        if (!car) return;
-        RT::Line(v1+car.GetLocation(), v2+car.GetLocation()).DrawWithinFrustum(canvas, frust);
-    } else {
-        RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
-    }
-    
-}
-void RL_Paint::DrawFlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
-    RT::Sphere(p, 50).Draw(canvas, frust, cameraLocation, 10);
 }
 
-void RL_Paint::DrawStartPoint(int p, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
-    CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car) return;
-    Vector v1 = RotatePointWithCar(Vector((float) p, 0, 0), car.GetLocation(), car.GetRotation());
-    Vector v2 = RotatePointWithCar(Vector((float)p, 0, -10), car.GetLocation(), car.GetRotation());
-    RT::Sphere(v1, 2).Draw(canvas, frust, cameraLocation, 10);
-    RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
-}
 
 bool RL_Paint::HasResetIntervalElapsed() {
     float now = gameWrapper->GetEngine().GetPhysicsTime();
@@ -238,16 +211,13 @@ void RL_Paint::DeleteTrailing() {
         points.erase(points.begin());
     }
 }
-void RL_Paint::AddPoint(Vector p) {
-    points.push_back(p);
-}
 
-void RL_Paint::GetPointInFront(int startPoint, int mode) {
+void RL_Paint::AddDrawPoint(int startPoint, int mode) {
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
     Vector v = *relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
-    Vector rp = this->RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
+    Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
     switch (mode) {
         case TRAILING:
             DeleteTrailing();
@@ -262,26 +232,23 @@ void RL_Paint::GetPointInFront(int startPoint, int mode) {
         default:
             DeleteTrailing();
     };
-    this->AddPoint(rp);
+    points.push_back(rp);
     this->CalculatePairs();
 }
 
 
-void RL_Paint::BallHit(Vector HitLocation) {
+void RL_Paint::BallHit(Vector hitLocation) {
     //this->Log("Ballhit Start");
-    CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car) return;
-    points_ballhit.push_back(HitLocation);
+    points_ballhit.push_back(hitLocation);
 
     //this->Log("Ballhit End");
 }
 void RL_Paint::FlipReset() {
     ServerWrapper game = gameWrapper->GetGameEventAsServer();
     if (!game) return;
-    ArrayWrapper<BallWrapper> balls = game.GetGameBalls();
-    for (BallWrapper ball : balls) {
-        points_flipreset.push_back(ball.GetTrajectoryStartLocation());
-    }
+    Vector ballpos = game.GetBall().GetTrajectoryStartLocation();
+    points_flipreset.push_back(ballpos);
+
 }
 void RL_Paint::Freeze(Vector v) {
     CarWrapper car = gameWrapper->GetLocalCar();
@@ -291,36 +258,4 @@ void RL_Paint::Freeze(Vector v) {
     car.SetLocation(v);
     car.SetVelocity(0);
     car.SetRotation(0);
-}
-
-
-//Vector RL_Paint::RotatePointWithCar2(Vector offset,Vector carLocation, Rotator carRotation) // direct copy of hitbox plugin
-//{
-//    // offset is from middle of the car on the car so Vector(80,0,0) would be forwards from the car
-//    double dPitch = (double)carRotation.Pitch / 32768.0 * 3.14159;
-//    double dYaw = (double)carRotation.Yaw / 32768.0 * 3.14159;
-//    double dRoll = (double)carRotation.Roll / 32768.0 * 3.14159;
-//
-//    float sx = sin(dRoll);
-//    float cx = cos(dRoll);
-//    float sy = sin(-dYaw);
-//    float cy = cos(-dYaw);
-//    float sz = sin(dPitch);
-//    float cz = cos(dPitch);
-//    offset = Vector(offset.X, offset.Y * cx - offset.Z * sx, offset.Y * sx + offset.Z * cx);
-//    offset = Vector(offset.X * cz - offset.Y * sz, offset.X * sz + offset.Y * cz, offset.Z);
-//    offset = Vector(offset.X * cy + offset.Z * sy, offset.Y, -offset.X * sy + offset.Z * cy);
-//    float tmp = offset.Z;
-//    offset.Z = offset.Y;
-//    offset.Y = tmp;
-//    return offset + carLocation;
-//    //Vector rotatedVector = this->Rotate(offset, dRoll, -dYaw, dPitch) + carLocation;//
-//
-//}
-
-
-Vector RL_Paint::RotatePointWithCar(Vector offset, Vector carLocation, Rotator carRotation)
-{
-    Quat q = RotatorToQuat(carRotation);
-    return RotateVectorWithQuat(offset, q)+carLocation;
 }
