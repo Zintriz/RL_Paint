@@ -10,6 +10,31 @@ void RL_Paint::onLoad()
     enabled = std::make_shared<bool>(true);
     cvarManager->registerCvar("paint_enabled", "1", "Enable/Disable RL_Paint")
         .bindTo(enabled);
+    cvarManager->getCvar("paint_enabled").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        bool disabled = !cvar.getBoolValue();
+        if (disabled) {
+            cvarManager->getCvar("sv_soccar_gravity").setValue(-650);
+        }
+        });
+
+    show_ballhits = std::make_shared<bool>(false);
+    cvarManager->registerCvar("paint_ballhits", "0", "Enable/Disable Ballhit Markers")
+        .bindTo(enabled);
+    cvarManager->getCvar("paint_ballhits").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        bool disabled = !cvar.getBoolValue();
+        if (disabled) {
+            points_ballhit.clear();
+        }
+        });
+    show_flipreset = std::make_shared<bool>(false);
+    cvarManager->registerCvar("paint_flipreset", "0", "Enable/Disable flipreset Markers")
+        .bindTo(enabled);
+    cvarManager->getCvar("paint_flipreset").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        bool disabled = !cvar.getBoolValue();
+        if (disabled) {
+            points_flipreset.clear();
+        }
+        });
 
     points_max = std::make_shared<int>(120);
     cvarManager->registerCvar("paint_points", "120", "Painted points before reset",true,true,20,true,9999)
@@ -21,12 +46,14 @@ void RL_Paint::onLoad()
     cvarManager->getCvar("paint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         ClearPoints();
     });
+
     relative = std::make_shared<bool>(true);
     cvarManager->registerCvar("paint_relative", "1", "If true, dots line follows the car instead of worldspace")
         .bindTo(relative);
     cvarManager->getCvar("paint_relative").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         ClearPoints();
         });
+
     start_point = std::make_shared<int>(80);
     cvarManager->registerCvar("paint_start_point", "80", "The start point of the trail", true, true, -300, true, 300)
         .bindTo(start_point);
@@ -63,63 +90,59 @@ void RL_Paint::onUnload()
 
 void RL_Paint::LoadHooks()
 {
+    gameWrapper->HookEventWithCallerPost<CarWrapper>("Function TAGame.Car_TA.OnHitBall",
+        [this](CarWrapper caller, void* params, std::string eventname) {
+            if (!enabled || !*enabled) return;
+            // This cast is only safe if you're 100% sure the params are correct
+            CarHitBallParams* hitParams = (CarHitBallParams*)params;
+            BallWrapper ballHit = BallWrapper(hitParams->ball);
+            Vector v = Vector(hitParams->HitLocation);
+            this->BallHit(v);
+            // Now you know what ball was hit!
+        });
+
     gameWrapper->HookEvent("Function TAGame.EngineShare_TA.EventPostPhysicsStep",
         [this](std::string eventName) {
-            if (enabled && start_point && mode && !*enabled) return;
+            if (!enabled || !*enabled) return;
             this->GetPointInFront(*start_point, *mode);
         });
     gameWrapper->HookEvent("Function TAGame.Car_TA.EventPerformedFlipReset",
         [this](std::string eventName) {
-            if (!*enabled) return;
+            if (!enabled || !*enabled) return;
             this->FlipReset();
         });
-    gameWrapper->HookEvent("Function TAGame.Car_TA.OnHitBall",
-        [this](std::string eventName) {
-            if (!*enabled) return;
-            this->BallHit();
-        });
+    //gameWrapper->HookEvent("Function TAGame.Car_TA.OnHitBall",
+    //    [this](std::string eventName) {
+    //        if (!enabled || !*show_ballhits) return;
+    //        this->BallHit();
+    //    });
     gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed",
         [this](std::string eventName) {
-            if (!*enabled) return;
+            if (!enabled || !*enabled) return;
             this->ClearPoints();
         });
     gameWrapper->HookEvent("Function GameEvent_Soccar_TA.Countdown.BeginState",
         [this](std::string eventName) {
-            if (!*enabled) return;
+            if (!enabled || !*enabled) return;
             this->ClearPoints();
         });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
-            if (!*enabled) return;
+            if (!enabled || !*enabled) return;
             Render(canvas);
         });
 }
-
-//void RL_Paint::RenderSettings() {
-//    ImGui::TextUnformatted("A plugin to help give training metrics when learning how to do a speedflip in Musty's training pack: A503-264C-A7EB-D282");
-//
-//    CVarWrapper enableCvar = cvarManager->getCvar("sf_enabled");
-//    if (!enableCvar) return;
-//
-//    bool enabled = enableCvar.getBoolValue();
-//
-//    if (ImGui::Checkbox("Enable plugin", &enabled))
-//        enableCvar.setValue(enabled);
-//    if (ImGui::IsItemHovered())
-//        ImGui::SetTooltip("Enable/Disable Speeflip trainer plugin");
-//
-//    // ------------------------ ANGLE ----------------------------------
-//    ImGui::Separator();
-//}
-//
-//void RL_Paint::RenderWindow() {
-//}
 
 void RL_Paint::Log(std::string msg)
 {
     cvarManager->log(msg);
 }
-
+void RL_Paint::GetParams(void* p, int n) {
+    for (size_t i = 0; i < n; i++) {
+        uintptr_t param = *(uintptr_t*)((uint8_t*)p + i*8);
+        this->Log(std::format("param{} {:x}",i, param));
+    }
+}
 void RL_Paint::CalculatePairs() {
     pairs.clear();
     for (size_t i = 0; i < points.size() - 1; i++) {
@@ -137,15 +160,13 @@ bool RL_Paint::IsValidGameState()
 {
     int ingame = (gameWrapper->IsInGame()) ? 1 : (gameWrapper->IsInReplay()) ? 2 : 0;
     if (!ingame) {
-        //this->Log("Not in valid game state 1");
         return false;
     }
     ServerWrapper game = (ingame == 1) ? gameWrapper->GetGameEventAsServer() : gameWrapper->GetGameEventAsReplay();
     if (game.IsNull()) {
-        //this->Log("Not in valid game state 2");
         return false;
     }
-
+    if (gameWrapper->IsPaused()) return false;
     return true;
 }
 
@@ -153,13 +174,8 @@ bool RL_Paint::IsValidGameState()
 void RL_Paint::Render(CanvasWrapper canvas) {
     if (!IsValidGameState())
         return;
-
-    LinearColor colors;
-    colors.R = 255;
-    colors.G = 255;
-    colors.B = 0;
-    colors.A = 255;
     canvas.SetColor(colors);
+
     auto camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
     RT::Frustum frust{ canvas, camera };
@@ -178,24 +194,6 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     if (visualize_start_point && start_point && *visualize_start_point) {
         DrawStartPoint(*start_point, canvas, frust, camera.GetLocation());
     }
-
-
-
-    //this->Log("1");
-    //this->Log(std::format("new vector = {} {} {}", rotatedVector.X, rotatedVector.Y, rotatedVector.Z));
-
-    
-    //this->Log(std::format("X: {}",RotatorToQuats(car.GetRotation()).));
- 
-    //Vector v1 = RotatePointWithCar(Vector(80, 50, 0),Vector(0,0,0), car.GetRotation());
-    //Vector v2 = RotatePointWithCar(Vector(80, 0, 0), Vector(0,0,0), car.GetRotation());
-    //this->Log(std::format("xyz: {} {} {}", v1.X, v1.Y, v1.Z));
-    //RT::Line(v1,v2).DrawWithinFrustum(canvas, frust);
-   
-    //RT::Sphere(cl, RotatorToQuat(r) * Quat(0.71,0,0.71,0), 50).Draw(canvas, frust, camera.GetLocation(), 30);
-
-
-
 }
 void RL_Paint::DrawBallHit(Vector p, CanvasWrapper canvas, RT::Frustum frust) {
     Vector up = Vector(p.X, p.Y, p.Z + 5);
@@ -221,7 +219,7 @@ void RL_Paint::DrawStartPoint(int p, CanvasWrapper canvas, RT::Frustum frust, Ve
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
     Vector v1 = RotatePointWithCar(Vector((float) p, 0, 0), car.GetLocation(), car.GetRotation());
-    Vector v2 = RotatePointWithCar(Vector((float)p, -10, 0), car.GetLocation(), car.GetRotation());
+    Vector v2 = RotatePointWithCar(Vector((float)p, 0, -10), car.GetLocation(), car.GetRotation());
     RT::Sphere(v1, 2).Draw(canvas, frust, cameraLocation, 10);
     RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
 }
@@ -240,21 +238,16 @@ void RL_Paint::DeleteTrailing() {
         points.erase(points.begin());
     }
 }
-void RL_Paint::AddPoints(Vector p) {
-    if (points.empty()) {
-        points.push_back(p);
-        return;
-    }
+void RL_Paint::AddPoint(Vector p) {
     points.push_back(p);
 }
 
 void RL_Paint::GetPointInFront(int startPoint, int mode) {
-    //if (!IsValidGameState()) return;
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
     Vector v = *relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
-    Vector rp = this->RotatePointWithCar(Vector(startPoint, 0, 0), v, r);
+    Vector rp = this->RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
     switch (mode) {
         case TRAILING:
             DeleteTrailing();
@@ -269,19 +262,16 @@ void RL_Paint::GetPointInFront(int startPoint, int mode) {
         default:
             DeleteTrailing();
     };
-    // Delete Points if needed
-
-    // Add new points
-    this->AddPoints(rp);
+    this->AddPoint(rp);
     this->CalculatePairs();
 }
 
 
-void RL_Paint::BallHit() {
+void RL_Paint::BallHit(Vector HitLocation) {
     //this->Log("Ballhit Start");
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
-    points_ballhit.push_back(car.GetLocation());
+    points_ballhit.push_back(HitLocation);
 
     //this->Log("Ballhit End");
 }
@@ -289,13 +279,9 @@ void RL_Paint::FlipReset() {
     ServerWrapper game = gameWrapper->GetGameEventAsServer();
     if (!game) return;
     ArrayWrapper<BallWrapper> balls = game.GetGameBalls();
-    Vector x;
     for (BallWrapper ball : balls) {
-        x = ball.GetTrajectoryStartLocation();
+        points_flipreset.push_back(ball.GetTrajectoryStartLocation());
     }
-    points_flipreset.push_back(x);
-    CarWrapper car = gameWrapper->GetLocalCar();
-    //car.SetFrozen(true);
 }
 void RL_Paint::Freeze(Vector v) {
     CarWrapper car = gameWrapper->GetLocalCar();
@@ -308,27 +294,33 @@ void RL_Paint::Freeze(Vector v) {
 }
 
 
-Vector RL_Paint::RotatePointWithCar(Vector offset,Vector carLocation, Rotator carRotation) // direct copy of hitbox plugin
+//Vector RL_Paint::RotatePointWithCar2(Vector offset,Vector carLocation, Rotator carRotation) // direct copy of hitbox plugin
+//{
+//    // offset is from middle of the car on the car so Vector(80,0,0) would be forwards from the car
+//    double dPitch = (double)carRotation.Pitch / 32768.0 * 3.14159;
+//    double dYaw = (double)carRotation.Yaw / 32768.0 * 3.14159;
+//    double dRoll = (double)carRotation.Roll / 32768.0 * 3.14159;
+//
+//    float sx = sin(dRoll);
+//    float cx = cos(dRoll);
+//    float sy = sin(-dYaw);
+//    float cy = cos(-dYaw);
+//    float sz = sin(dPitch);
+//    float cz = cos(dPitch);
+//    offset = Vector(offset.X, offset.Y * cx - offset.Z * sx, offset.Y * sx + offset.Z * cx);
+//    offset = Vector(offset.X * cz - offset.Y * sz, offset.X * sz + offset.Y * cz, offset.Z);
+//    offset = Vector(offset.X * cy + offset.Z * sy, offset.Y, -offset.X * sy + offset.Z * cy);
+//    float tmp = offset.Z;
+//    offset.Z = offset.Y;
+//    offset.Y = tmp;
+//    return offset + carLocation;
+//    //Vector rotatedVector = this->Rotate(offset, dRoll, -dYaw, dPitch) + carLocation;//
+//
+//}
+
+
+Vector RL_Paint::RotatePointWithCar(Vector offset, Vector carLocation, Rotator carRotation)
 {
-    // offset is from middle of the car on the car so Vector(80,0,0) would be forwards from the car
-    double dPitch = (double)carRotation.Pitch / 32768.0 * 3.14159;
-    double dYaw = (double)carRotation.Yaw / 32768.0 * 3.14159;
-    double dRoll = (double)carRotation.Roll / 32768.0 * 3.14159;
-
-    float sx = sin(dRoll);
-    float cx = cos(dRoll);
-    float sy = sin(-dYaw);
-    float cy = cos(-dYaw);
-    float sz = sin(dPitch);
-    float cz = cos(dPitch);
-    offset = Vector(offset.X, offset.Y * cx - offset.Z * sx, offset.Y * sx + offset.Z * cx);
-    offset = Vector(offset.X * cz - offset.Y * sz, offset.X * sz + offset.Y * cz, offset.Z);
-    offset = Vector(offset.X * cy + offset.Z * sy, offset.Y, -offset.X * sy + offset.Z * cy);
-    float tmp = offset.Z;
-    offset.Z = offset.Y;
-    offset.Y = tmp;
-    return offset + carLocation;
-    //Vector rotatedVector = this->Rotate(offset, dRoll, -dYaw, dPitch) + carLocation;//
-
+    Quat q = RotatorToQuat(carRotation);
+    return RotateVectorWithQuat(offset, q)+carLocation;
 }
-

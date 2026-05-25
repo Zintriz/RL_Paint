@@ -19,6 +19,11 @@ RL_Paint
 7|
 9|Teleports you to the middle of the field with -1 gravity and 0 velocity.
 0|Restore gravity to default|sv_soccar_gravity -650
+8|
+1|Draw Ballhit Markers|paint_ballhits
+7|
+1|Draw FlipReset Ball|paint_flipreset
+8|
 9|
 0|Refresh settings|cl_settings_refreshplugins
 8|
