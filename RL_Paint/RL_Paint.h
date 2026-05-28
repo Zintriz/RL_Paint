@@ -32,7 +32,6 @@ public:
 	void LoadHooks();
 	void Render(CanvasWrapper canvas);
 
-	void CalculatePairs();
 	void ClearPoints();	
 	void NewBallHitPos(Vector hitLocation);
 	void DeleteTrailing(int max);
@@ -45,7 +44,6 @@ public:
 	void AddDrawPoint(int startPoint, int mode);
 	void Freeze(Vector v);
 
-	std::vector<std::pair<Vector, Vector>> pairs;
 	std::vector<Vector> points;
 	std::vector<Vector> points_flipreset;
 	std::vector<Vector> points_ballhit;

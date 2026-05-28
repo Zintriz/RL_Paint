@@ -1,7 +1,7 @@
 ﻿#include "RL_Paint.h"
 #include "Draw.h"
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.3.4", PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.4", PLUGINTYPE_FREEPLAY)
 LinearColor colors(255, 255, 0, 255);
 
 void RL_Paint::onLoad()
@@ -150,19 +150,11 @@ void RL_Paint::GetParams(void* p, int n) {
         this->Log(std::format("param{} {:x}",i, param));
     }
 }
-void RL_Paint::CalculatePairs() {
-    pairs.clear();
-    if (points.empty()) return;
-    for (size_t i = 0; i < points.size() - 1; i++) {
-        pairs.push_back({ points[i], points[i + 1] });
-    }
-}
 void RL_Paint::ClearPoints() {
     this->Log("Clearing Points");
     points.clear();
     points_flipreset.clear();
     points_ballhit.clear();
-    pairs.clear();
 }
 bool RL_Paint::IsValidGameState()
 {
@@ -187,12 +179,18 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     if (camera.IsNull()) return;
     Vector cameraLocation = camera.GetLocation();
     RT::Frustum frust{ canvas, camera };
-    if (pairs.empty()) return;
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
-    for (const auto &p : pairs) {
-        if (!relative) return;
-        Draw::Line(p.first, p.second, car, *relative, canvas, frust);
+    //for (const auto &p : pairs) {
+    //    if (!relative) return;
+    //    Draw::Line(p.first, p.second, car, *relative, canvas, frust);
+    //}
+    if (!relative) return;
+    if (points.empty()) return;
+    if (points.size() > 1) {
+        for (size_t i = 0; i < points.size()-1; i++) {
+            Draw::Line(points[i], points[i+1], car, *relative, canvas, frust);
+        }
     }
     for (Vector p : points_ballhit) {
         Draw::BallHit(p, canvas, frust);
@@ -221,16 +219,17 @@ void RL_Paint::Render(CanvasWrapper canvas) {
 }
 
 
-bool RL_Paint::HasResetIntervalElapsed() {
-    float now = gameWrapper->GetEngine().GetPhysicsTime();
-
-    bool elapsed = (now - timestamp) > resetTime;
-    //this->Log(std::format("ct:{}, stamp:{}", now, timestamp));
-    timestamp = now;
-    return elapsed;
-}
+//bool RL_Paint::HasResetIntervalElapsed() { // not in use
+//    float now = gameWrapper->GetEngine().GetPhysicsTime();
+//
+//    bool elapsed = (now - timestamp) > resetTime;
+//    //this->Log(std::format("ct:{}, stamp:{}", now, timestamp));
+//    timestamp = now;
+//    return elapsed;
+//}
 void RL_Paint::DeleteTrailing(int max) {
-    if ((int)points.size() > max) {
+    if ((int)points.size() > max+1) {
+        this->Log("reset");
         points.clear();
         return;
     }
@@ -248,9 +247,6 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
     Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
     switch (mode) {
         case TRAILING:
-            if ((int)points.size() > *points_max) {
-                this->ClearPoints();
-            }
             DeleteTrailing(*points_max);
             points.push_back(rp);
             break;
@@ -276,8 +272,6 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
             DeleteTrailing(*points_max);
             points.push_back(rp);
     };
-    
-    this->CalculatePairs();
 }
 
 
