@@ -23,6 +23,7 @@ RL_Paint
 1|Draw Ballhit Markers|paint_ballhits
 7|
 1|Draw FlipReset Ball|paint_flipreset
+6|Start Point Type|paint_startpoint_mode|Pin@0&Sphere with Line@1&Dot@2
 8|
 9|
 0|Refresh settings|cl_settings_refreshplugins

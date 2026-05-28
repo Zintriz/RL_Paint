@@ -10,16 +10,13 @@ enum modes
 	ON_RESET,
 	ON_POINTRESET
 };
-template <typename T, typename std::enable_if<std::is_base_of<ObjectWrapper, T>::value>::type*>
-void GameWrapper::HookEventWithCallerPost(std::string eventName,
-	std::function<void(T caller, void* params, std::string eventName)> callback)
+enum startpoint_modes
 {
-	auto wrapped_callback = [callback](ActorWrapper caller, void* params, std::string eventName)
-		{
-			callback(T(caller.memory_address), params, eventName);
-		};
-	HookEventWithCallerPost<ActorWrapper>(eventName, wrapped_callback);
-}
+	PIN,
+	LINESPHERE,
+	DOT
+};
+
 struct CarHitBallParams {
 	uintptr_t ball;
 	Vector HitLocation;
@@ -36,9 +33,9 @@ public:
 
 	void CalculatePairs();
 	void ClearPoints();	
-	void BallHit(Vector hitLocation);
+	void NewBallHitPos(Vector hitLocation);
 	void DeleteTrailing();
-	void FlipReset();
+	void NewFlipResetPos();
 	void GetParams(void* p, int n);
 	//Vector RotatePointWithCar2(Vector offset, Vector carLocation, Rotator carRotation);
 
@@ -66,6 +63,7 @@ public:
 
 	std::shared_ptr<int> start_point;
 	std::shared_ptr<bool> visualize_start_point;
+	std::shared_ptr<int> startpoint_mode;
 
 
 private:

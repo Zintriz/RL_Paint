@@ -1,7 +1,7 @@
 ﻿#include "RL_Paint.h"
 #include "Draw.h"
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.2.2", PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.3.4", PLUGINTYPE_FREEPLAY)
 LinearColor colors(255, 255, 0, 255);
 
 void RL_Paint::onLoad()
@@ -20,7 +20,7 @@ void RL_Paint::onLoad()
 
     show_ballhits = std::make_shared<bool>(false);
     cvarManager->registerCvar("paint_ballhits", "0", "Enable/Disable Ballhit Markers")
-        .bindTo(enabled);
+        .bindTo(show_ballhits);
     cvarManager->getCvar("paint_ballhits").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         bool disabled = !cvar.getBoolValue();
         if (disabled) {
@@ -29,7 +29,7 @@ void RL_Paint::onLoad()
         });
     show_flipreset = std::make_shared<bool>(false);
     cvarManager->registerCvar("paint_flipreset", "0", "Enable/Disable flipreset Markers")
-        .bindTo(enabled);
+        .bindTo(show_flipreset);
     cvarManager->getCvar("paint_flipreset").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         bool disabled = !cvar.getBoolValue();
         if (disabled) {
@@ -67,6 +67,13 @@ void RL_Paint::onLoad()
         Freeze(Vector(0, 0, 300));
         }, "", PERMISSION_ALL);
 
+    startpoint_mode = std::make_shared<int>(0);
+    cvarManager->registerCvar("paint_startpoint_mode", "0", "Type of startpoint-display")
+        .bindTo(startpoint_mode);
+    cvarManager->getCvar("paint_startpoint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
+        ClearPoints();
+        });
+
     
     //cvarManager->getCvar("paint_enabled").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
     //    //addOnValueChanged is a callback, where everything in this block will be called whenever the cvar value is changed. You can call functions, or just log information.
@@ -94,22 +101,24 @@ void RL_Paint::LoadHooks()
     gameWrapper->HookEventWithCallerPost<CarWrapper>("Function TAGame.Car_TA.OnHitBall",
         [this](CarWrapper caller, void* params, std::string eventname) {
             if (!enabled || !*enabled) return;
+            if (!show_ballhits || !*show_ballhits) return;
             // This cast is only safe if you're 100% sure the params are correct
             CarHitBallParams* hitParams = (CarHitBallParams*)params;
             BallWrapper ballHit = BallWrapper(hitParams->ball);
             Vector v = Vector(hitParams->HitLocation);
-            this->BallHit(v);
+            this->NewBallHitPos(v);
         });
 
     gameWrapper->HookEvent("Function TAGame.EngineShare_TA.EventPostPhysicsStep",
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
+            if (!start_point || !mode) return;
             this->AddDrawPoint(*start_point, *mode);
         });
     gameWrapper->HookEvent("Function TAGame.Car_TA.EventPerformedFlipReset",
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
-            this->FlipReset();
+            this->NewFlipResetPos();
         });
 
     gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed",
@@ -121,8 +130,6 @@ void RL_Paint::LoadHooks()
         [this](std::string eventName) {
             if (!enabled || !*enabled) return;
             this->ClearPoints();
-
-
         });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
@@ -175,14 +182,15 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     if (!IsValidGameState())
         return;
     canvas.SetColor(colors);
-
     auto camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
+    Vector cameraLocation = camera.GetLocation();
     RT::Frustum frust{ canvas, camera };
     if (pairs.empty()) return;
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car) return;
-    for (auto p : pairs) {
+    for (const auto &p : pairs) {
+        if (!relative) return;
         Draw::Line(p.first, p.second, car, *relative, canvas, frust);
     }
     for (Vector p : points_ballhit) {
@@ -191,8 +199,23 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     for (Vector fr : points_flipreset) {
         Draw::FlipReset(fr, canvas, frust, camera.GetLocation());
     }
-    if (visualize_start_point && start_point && *visualize_start_point) {
-        Draw::StartPoint(*start_point, car, canvas, frust, camera.GetLocation());
+    if (!visualize_start_point || !start_point) return;
+    if (*visualize_start_point) {
+        switch (*startpoint_mode) {
+            case PIN:
+                Draw::StartPoint1(*start_point, car, canvas, frust, cameraLocation);
+                break;
+            case LINESPHERE:
+                Draw::StartPoint2(*start_point, car, canvas, frust, cameraLocation);
+                break;
+            case DOT:
+                Draw::StartPoint3(*start_point, car, canvas, frust, cameraLocation);
+                break;
+            default:
+                Draw::StartPoint1(*start_point, car, canvas, frust, cameraLocation);
+                break;
+        }
+        
     }
 }
 
@@ -214,7 +237,7 @@ void RL_Paint::DeleteTrailing() {
 
 void RL_Paint::AddDrawPoint(int startPoint, int mode) {
     CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car) return;
+    if (!car || !relative) return;
     Vector v = *relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
@@ -225,6 +248,7 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
         case ON_RESET:
             break;
         case ON_POINTRESET:
+            if (!points_max) return;
             if ((int)points.size() > *points_max) {
                 this->ClearPoints();
             }
@@ -237,13 +261,12 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
 }
 
 
-void RL_Paint::BallHit(Vector hitLocation) {
-    //this->Log("Ballhit Start");
+void RL_Paint::NewBallHitPos(Vector hitLocation) {
+    if (!show_ballhits || !*show_ballhits) return;
     points_ballhit.push_back(hitLocation);
-
-    //this->Log("Ballhit End");
 }
-void RL_Paint::FlipReset() {
+void RL_Paint::NewFlipResetPos() {
+    if (!show_flipreset || !*show_flipreset) return;
     ServerWrapper game = gameWrapper->GetGameEventAsServer();
     if (!game) return;
     Vector ballpos = game.GetBall().GetTrajectoryStartLocation();

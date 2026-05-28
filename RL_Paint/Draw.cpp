@@ -23,11 +23,24 @@ void Draw::FlipReset(Vector p, CanvasWrapper canvas, RT::Frustum frust, Vector c
     RT::Sphere(p, 50).Draw(canvas, frust, cameraLocation, 10);
 }
 
-void Draw::StartPoint(int p, CarWrapper car, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
+void Draw::StartPoint1(int p, CarWrapper car, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
     Vector v1 = RotatePointWithCar(Vector((float)p, 0, 0), car.GetLocation(), car.GetRotation());
     Vector v2 = RotatePointWithCar(Vector((float)p, 0, -10), car.GetLocation(), car.GetRotation());
     RT::Sphere(v1, 2).Draw(canvas, frust, cameraLocation, 10);
     RT::Line(v1, v2).DrawWithinFrustum(canvas, frust);
+}
+void Draw::StartPoint2(int p, CarWrapper car, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation) {
+    Vector v = RotatePointWithCar(Vector((float)p, 0, 0), car.GetLocation(), car.GetRotation());
+    RT::Sphere(v, 5).Draw(canvas, frust, cameraLocation, 10);
+    Vector up = v + Vector(0, 0, 15);
+    Vector down = v + Vector(0, 0, -15);
+    RT::Line(up, down).DrawWithinFrustum(canvas, frust);
+}
+
+void Draw::StartPoint3(int p, CarWrapper car, CanvasWrapper canvas, RT::Frustum frust, Vector cameraLocation)
+{
+    Vector v = RotatePointWithCar(Vector((float)p, 0, 0), car.GetLocation(), car.GetRotation());
+    RT::Sphere(v, 2).Draw(canvas, frust, cameraLocation, 8);
 }
 
 Vector Draw::RotatePointWithCar(Vector offset, Vector carLocation, Rotator carRotation) // should probably not be in this file
