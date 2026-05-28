@@ -7,8 +7,9 @@
 enum modes
 {
 	TRAILING,
-	ON_RESET,
-	ON_POINTRESET
+	NEVER,
+	RESET,
+	WALL
 };
 enum startpoint_modes
 {
@@ -34,7 +35,7 @@ public:
 	void CalculatePairs();
 	void ClearPoints();	
 	void NewBallHitPos(Vector hitLocation);
-	void DeleteTrailing();
+	void DeleteTrailing(int max);
 	void NewFlipResetPos();
 	void GetParams(void* p, int n);
 	//Vector RotatePointWithCar2(Vector offset, Vector carLocation, Rotator carRotation);

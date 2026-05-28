@@ -152,6 +152,7 @@ void RL_Paint::GetParams(void* p, int n) {
 }
 void RL_Paint::CalculatePairs() {
     pairs.clear();
+    if (points.empty()) return;
     for (size_t i = 0; i < points.size() - 1; i++) {
         pairs.push_back({ points[i], points[i + 1] });
     }
@@ -228,35 +229,54 @@ bool RL_Paint::HasResetIntervalElapsed() {
     timestamp = now;
     return elapsed;
 }
-void RL_Paint::DeleteTrailing() {
-    //BUG does not remove excess points over max fast enough
-    if (points.size() > *points_max) {
+void RL_Paint::DeleteTrailing(int max) {
+    if ((int)points.size() > max) {
+        points.clear();
+        return;
+    }
+
+    if (points.size() > max) {
         points.erase(points.begin());
     }
 }
 
 void RL_Paint::AddDrawPoint(int startPoint, int mode) {
     CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car || !relative) return;
+    if (!car || !relative || !points_max) return;
     Vector v = *relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
     switch (mode) {
         case TRAILING:
-            DeleteTrailing();
-            break;
-        case ON_RESET:
-            break;
-        case ON_POINTRESET:
-            if (!points_max) return;
             if ((int)points.size() > *points_max) {
                 this->ClearPoints();
             }
+            DeleteTrailing(*points_max);
+            points.push_back(rp);
+            break;
+        case NEVER:
+                DeleteTrailing(9999);
+                points.push_back(rp);
+            break;
+        case RESET:
+            if ((int)points.size() > *points_max) {
+                this->ClearPoints();
+            }
+            points.push_back(rp);
+            break;
+        case WALL:
+            if (car.IsOnWall()) {
+                this->ClearPoints();
+            }
+            if (!car.IsOnGround()) {
+                points.push_back(rp);
+            }
             break;
         default:
-            DeleteTrailing();
+            DeleteTrailing(*points_max);
+            points.push_back(rp);
     };
-    points.push_back(rp);
+    
     this->CalculatePairs();
 }
 
