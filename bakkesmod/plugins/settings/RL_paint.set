@@ -8,10 +8,10 @@ RL_Paint
 6|Mode|paint_mode|Trailing@0&Never@1&Reset@2&Wall@3
 5|Points|paint_points|20|10000
 7|
-9|-  120 points makes just below a circle when trailing
+9|-  120 points makes just about a circle when trailing.
 5|Start Point|paint_start_point|-300|300
 7|
-9|-  74 is just in front of a octane car.
+9|-  74 is just in front of a octane car, 80 is default.
 9|Tip: You can ctrl+click the slider to set a specific number
 9|
 8|
@@ -22,10 +22,11 @@ RL_Paint
 8|
 1|Draw Ballhit Markers|paint_ballhits
 7|
-1|Draw FlipReset Ball|paint_flipreset
-6|Start Point Type|paint_startpoint_mode|Pin@0&Sphere with Line@1&Dot@2
+1|Draw Flipreset Sphere|paint_flipreset
+7|
+1|Draw Stick Direction|paint_stickDirection
+6|Start Point Type|paint_startpoint_mode|Pin@0&Sphere with Line@1&Dot@2&Brush@3
 8|
-9|
 0|Refresh settings|cl_settings_refreshplugins
 8|
 9|Created by Zintriz

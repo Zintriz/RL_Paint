@@ -15,7 +15,8 @@ enum startpoint_modes
 {
 	PIN,
 	LINESPHERE,
-	DOT
+	DOT,
+	BRUSH
 };
 
 struct CarHitBallParams {
@@ -58,6 +59,8 @@ public:
 	std::shared_ptr<bool> relative;
 	std::shared_ptr<bool> show_ballhits;
 	std::shared_ptr<bool> show_flipreset;
+	std::shared_ptr<bool> show_stickDirection;
+
 
 
 	std::shared_ptr<int> start_point;

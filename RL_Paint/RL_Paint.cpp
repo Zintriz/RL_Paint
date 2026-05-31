@@ -1,7 +1,7 @@
 ﻿#include "RL_Paint.h"
 #include "Draw.h"
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.4", PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.5", PLUGINTYPE_FREEPLAY)
 LinearColor colors(255, 255, 0, 255);
 
 void RL_Paint::onLoad()
@@ -36,6 +36,9 @@ void RL_Paint::onLoad()
             points_flipreset.clear();
         }
         });
+    show_stickDirection = std::make_shared<bool>(false);
+    cvarManager->registerCvar("paint_stickDirection", "0", "Enable/Disable Stick direction")
+        .bindTo(show_stickDirection);
 
     points_max = std::make_shared<int>(120);
     cvarManager->registerCvar("paint_points", "120", "Painted points before reset",true,true,20,true,9999)
@@ -73,19 +76,6 @@ void RL_Paint::onLoad()
     cvarManager->getCvar("paint_startpoint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
         ClearPoints();
         });
-
-    
-    //cvarManager->getCvar("paint_enabled").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-    //    //addOnValueChanged is a callback, where everything in this block will be called whenever the cvar value is changed. You can call functions, or just log information.
-    //    if (cvar.getStringValue() == "1") {
-    //        *enabled = true;
-    //    };
-    //    if (cvar.getStringValue() == "0") {
-    //        *enabled = false;
-    //    };
-    //    }
-    //);
-    //cvarManager->getCvar("plugin_enabled").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {});
 
     //cvarManager->executeCommand("cl_settings_refreshplugins", false);
 
@@ -175,58 +165,51 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     if (!IsValidGameState())
         return;
     canvas.SetColor(colors);
-    auto camera = gameWrapper->GetCamera();
+    CameraWrapper camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
     Vector cameraLocation = camera.GetLocation();
     RT::Frustum frust{ canvas, camera };
     CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car) return;
-    //for (const auto &p : pairs) {
-    //    if (!relative) return;
-    //    Draw::Line(p.first, p.second, car, *relative, canvas, frust);
-    //}
-    if (!relative) return;
-    if (points.empty()) return;
+    if (!car || !relative || !&canvas ||  !&camera)
+        return; // check pointers
+
+    Draw frame = Draw(car, &canvas, &camera);
     if (points.size() > 1) {
         for (size_t i = 0; i < points.size()-1; i++) {
-            Draw::Line(points[i], points[i+1], car, *relative, canvas, frust);
+            frame.Line(points[i], points[i+1], *relative);
         }
     }
     for (Vector p : points_ballhit) {
-        Draw::BallHit(p, canvas, frust);
+        frame.BallHit(p);
     }
     for (Vector fr : points_flipreset) {
-        Draw::FlipReset(fr, canvas, frust, camera.GetLocation());
+        frame.FlipReset(fr);
+    }
+    if (*show_stickDirection) {
+        frame.FlipDirection();
     }
     if (!visualize_start_point || !start_point) return;
-    if (*visualize_start_point) {
-        switch (*startpoint_mode) {
-            case PIN:
-                Draw::StartPoint1(*start_point, car, canvas, frust, cameraLocation);
-                break;
-            case LINESPHERE:
-                Draw::StartPoint2(*start_point, car, canvas, frust, cameraLocation);
-                break;
-            case DOT:
-                Draw::StartPoint3(*start_point, car, canvas, frust, cameraLocation);
-                break;
-            default:
-                Draw::StartPoint1(*start_point, car, canvas, frust, cameraLocation);
-                break;
-        }
-        
+    if (!*visualize_start_point) return;
+    switch (*startpoint_mode) {
+        case PIN:
+            frame.StartPoint1(*start_point);
+            break;
+        case LINESPHERE:
+            frame.StartPoint2(*start_point);
+            break;
+        case DOT:
+            frame.StartPoint3(*start_point);
+            break;
+        case BRUSH:
+            frame.StartPoint4(*start_point);
+            break;
+        default:
+            frame.StartPoint1(*start_point);
+            break;
     }
+    
 }
 
-
-//bool RL_Paint::HasResetIntervalElapsed() { // not in use
-//    float now = gameWrapper->GetEngine().GetPhysicsTime();
-//
-//    bool elapsed = (now - timestamp) > resetTime;
-//    //this->Log(std::format("ct:{}, stamp:{}", now, timestamp));
-//    timestamp = now;
-//    return elapsed;
-//}
 void RL_Paint::DeleteTrailing(int max) {
     if ((int)points.size() > max+1) {
         this->Log("reset");
@@ -273,7 +256,6 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
             points.push_back(rp);
     };
 }
-
 
 void RL_Paint::NewBallHitPos(Vector hitLocation) {
     if (!show_ballhits || !*show_ballhits) return;
