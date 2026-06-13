@@ -188,7 +188,6 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     CameraWrapper camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
     Vector cameraLocation = camera.GetLocation();
-    RT::Frustum frust{ canvas, camera };
     CarWrapper car = gameWrapper->GetLocalCar();
     if (!car || !&canvas ||  !&camera)
         return; // check pointers
