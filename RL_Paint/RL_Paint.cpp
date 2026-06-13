@@ -1,97 +1,121 @@
 ﻿#include "RL_Paint.h"
 #include "Draw.h"
 
-BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.5", PLUGINTYPE_FREEPLAY)
+#define EVENT_EventPostPhysicsStep "Function TAGame.EngineShare_TA.EventPostPhysicsStep"
+#define EVENT_OnHitBall "Function TAGame.Car_TA.OnHitBall"
+#define EVENT_EventPerformedFlipReset "Function TAGame.Car_TA.EventPerformedFlipReset"
+#define EVENT_Destroyed "Function TAGame.GameEvent_Soccar_TA.Destroyed"
+#define EVENT_BeginState "Function GameEvent_Soccar_TA.Countdown.BeginState"
+
+
+
+BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.6", PLUGINTYPE_FREEPLAY)
 LinearColor colors(255, 255, 0, 255);
 
 void RL_Paint::onLoad()
 {
     this->Log("RL_Paint Loaded");
-
-    enabled = std::make_shared<bool>(true);
-    cvarManager->registerCvar("paint_enabled", "1", "Enable/Disable RL_Paint")
-        .bindTo(enabled);
+    cvarManager->registerCvar("paint_enabled", "1", "Enable/Disable RL_Paint");
     cvarManager->getCvar("paint_enabled").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        bool disabled = !cvar.getBoolValue();
-        if (disabled) {
+        enabled = cvar.getBoolValue();
+        if (enabled) {
+            LoadHooks();
+            //LoadCvars();
+        }
+        else {
+            onUnload();
             cvarManager->getCvar("sv_soccar_gravity").setValue(-650);
         }
         });
+    LoadHooks();
+    LoadCvars();
+}
+void RL_Paint::LoadCvars() {
 
-    show_ballhits = std::make_shared<bool>(false);
-    cvarManager->registerCvar("paint_ballhits", "0", "Enable/Disable Ballhit Markers")
-        .bindTo(show_ballhits);
-    cvarManager->getCvar("paint_ballhits").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        bool disabled = !cvar.getBoolValue();
-        if (disabled) {
+    cvarManager->registerCvar("paint_ballhits", "0", "Enable/Disable Ballhit Markers").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            show_ballhits = cvar.getBoolValue();
             points_ballhit.clear();
-        }
         });
-    show_flipreset = std::make_shared<bool>(false);
-    cvarManager->registerCvar("paint_flipreset", "0", "Enable/Disable flipreset Markers")
-        .bindTo(show_flipreset);
-    cvarManager->getCvar("paint_flipreset").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        bool disabled = !cvar.getBoolValue();
-        if (disabled) {
+    cvarManager->registerCvar("paint_flipreset", "0", "Enable/Disable flipreset Markers").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            show_flipreset = cvar.getBoolValue();
             points_flipreset.clear();
-        }
-        });
-    show_stickDirection = std::make_shared<bool>(false);
-    cvarManager->registerCvar("paint_stickDirection", "0", "Enable/Disable Stick direction")
-        .bindTo(show_stickDirection);
-
-    points_max = std::make_shared<int>(120);
-    cvarManager->registerCvar("paint_points", "120", "Painted points before reset",true,true,20,true,9999)
-        .bindTo(points_max);
-
-    mode = std::make_shared<int>(0); 
-    cvarManager->registerCvar("paint_mode", "0", "0 = trailning, 1 = on_reset, 2 = on_pointcap.")
-        .bindTo(mode);
-    cvarManager->getCvar("paint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        ClearPoints();
-    });
-
-    relative = std::make_shared<bool>(true);
-    cvarManager->registerCvar("paint_relative", "1", "If true, dots line follows the car instead of worldspace")
-        .bindTo(relative);
-    cvarManager->getCvar("paint_relative").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        ClearPoints();
         });
 
-    start_point = std::make_shared<int>(80);
-    cvarManager->registerCvar("paint_start_point", "80", "The start point of the trail", true, true, -300, true, 300)
-        .bindTo(start_point);
+    cvarManager->registerCvar("paint_stickDirection", "0", "Enable/Disable Stick direction").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            show_stickDirection = cvar.getBoolValue();
+        });
 
-    visualize_start_point = std::make_shared<bool>(false);
-    cvarManager->registerCvar("paint_visualize_start_point", "0", "Vizualize the start point")
-        .bindTo(visualize_start_point);
+    cvarManager->registerCvar("paint_points", "120", "Painted points before reset", true, true, 20, true, 9999).addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            points_max = cvar.getIntValue();
+        });
 
+    cvarManager->registerCvar("paint_mode", "0", "0 = trailning, 1 = on_reset, 2 = on_pointcap.").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            mode = cvar.getIntValue();
+            points.clear();
+        });
+
+
+    cvarManager->registerCvar("paint_relative", "1", "If true, dots line follows the car instead of worldspace").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            relative = cvar.getBoolValue();
+            ClearPoints();
+        });
+
+    cvarManager->registerCvar("paint_start_point", "80", "The start point of the trail", true, true, -300, true, 300).addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            start_point = cvar.getIntValue();
+        });
+
+    cvarManager->registerCvar("paint_visualize_start_point", "0", "Vizualize the start point").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            visualize_start_point = cvar.getBoolValue();
+        });
+
+    cvarManager->registerCvar("paint_startpoint_mode", "0", "Type of startpoint-display").addOnValueChanged(
+        [this](std::string oldValue, CVarWrapper cvar) {
+            startpoint_mode = cvar.getIntValue();
+        });
     cvarManager->registerNotifier("paint_freeze", [this](std::vector<std::string> args) {
         Freeze(Vector(0, 0, 300));
         }, "", PERMISSION_ALL);
-
-    startpoint_mode = std::make_shared<int>(0);
-    cvarManager->registerCvar("paint_startpoint_mode", "0", "Type of startpoint-display")
-        .bindTo(startpoint_mode);
-    cvarManager->getCvar("paint_startpoint_mode").addOnValueChanged([this](std::string oldValue, CVarWrapper cvar) {
-        ClearPoints();
-        });
-
     //cvarManager->executeCommand("cl_settings_refreshplugins", false);
-
-    this->LoadHooks();
 }
 void RL_Paint::onUnload()
 {
     this->Log("RL_Paint Unloaded");
+    gameWrapper->UnhookEvent(EVENT_BeginState);
+    gameWrapper->UnhookEvent(EVENT_Destroyed);
+    gameWrapper->UnhookEvent(EVENT_EventPerformedFlipReset);
+    gameWrapper->UnhookEvent(EVENT_EventPostPhysicsStep);
+    gameWrapper->UnhookEventPost(EVENT_OnHitBall);
+    gameWrapper->UnregisterDrawables();
+
+    //cvarManager->removeCvar("paint_enabled");
+    //cvarManager->removeCvar("paint_ballhits");
+    //cvarManager->removeCvar("paint_flipreset");
+    //cvarManager->removeCvar("paint_stickDirection");
+    //cvarManager->removeCvar("paint_points");
+    //cvarManager->removeCvar("paint_mode");
+    //cvarManager->removeCvar("paint_relative");
+    //cvarManager->removeCvar("paint_start_point");
+    //cvarManager->removeCvar("paint_visualize_start_point");
+    //cvarManager->removeCvar("paint_startpoint_mode");
+
+    //cvarManager->removeNotifier("paint_freeze");
+    cvarManager->executeCommand("writeconfig", false);
+    //cvarManager->executeCommand("cl_settings_refreshplugins", false);
 }
 
 void RL_Paint::LoadHooks()
 {
-    gameWrapper->HookEventWithCallerPost<CarWrapper>("Function TAGame.Car_TA.OnHitBall",
+    gameWrapper->HookEventWithCallerPost<CarWrapper>(EVENT_OnHitBall,
         [this](CarWrapper caller, void* params, std::string eventname) {
-            if (!enabled || !*enabled) return;
-            if (!show_ballhits || !*show_ballhits) return;
+            if (!show_ballhits) return;
             // This cast is only safe if you're 100% sure the params are correct
             CarHitBallParams* hitParams = (CarHitBallParams*)params;
             BallWrapper ballHit = BallWrapper(hitParams->ball);
@@ -99,31 +123,26 @@ void RL_Paint::LoadHooks()
             this->NewBallHitPos(v);
         });
 
-    gameWrapper->HookEvent("Function TAGame.EngineShare_TA.EventPostPhysicsStep",
+    gameWrapper->HookEvent(EVENT_EventPostPhysicsStep,
         [this](std::string eventName) {
-            if (!enabled || !*enabled) return;
-            if (!start_point || !mode) return;
-            this->AddDrawPoint(*start_point, *mode);
+            this->AddDrawPoint(start_point, mode);
         });
-    gameWrapper->HookEvent("Function TAGame.Car_TA.EventPerformedFlipReset",
+    gameWrapper->HookEvent(EVENT_EventPerformedFlipReset,
         [this](std::string eventName) {
-            if (!enabled || !*enabled) return;
+            if (!show_flipreset) return;
             this->NewFlipResetPos();
         });
 
-    gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed",
+    gameWrapper->HookEvent(EVENT_Destroyed,
         [this](std::string eventName) {
-            if (!enabled || !*enabled) return;
             this->ClearPoints();
         });
-    gameWrapper->HookEvent("Function GameEvent_Soccar_TA.Countdown.BeginState",
+    gameWrapper->HookEvent(EVENT_BeginState,
         [this](std::string eventName) {
-            if (!enabled || !*enabled) return;
             this->ClearPoints();
         });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
-            if (!enabled || !*enabled) return;
             Render(canvas);
         });
 
@@ -162,21 +181,22 @@ bool RL_Paint::IsValidGameState()
 
 
 void RL_Paint::Render(CanvasWrapper canvas) {
+    canvas.SetColor(colors);
+    canvas.DrawString("RL_paint enabled");
     if (!IsValidGameState())
         return;
-    canvas.SetColor(colors);
     CameraWrapper camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
     Vector cameraLocation = camera.GetLocation();
     RT::Frustum frust{ canvas, camera };
     CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car || !relative || !&canvas ||  !&camera)
+    if (!car || !&canvas ||  !&camera)
         return; // check pointers
 
     Draw frame = Draw(car, &canvas, &camera);
     if (points.size() > 1) {
         for (size_t i = 0; i < points.size()-1; i++) {
-            frame.Line(points[i], points[i+1], *relative);
+            frame.Line(points[i], points[i+1], relative);
         }
     }
     for (Vector p : points_ballhit) {
@@ -185,27 +205,27 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     for (Vector fr : points_flipreset) {
         frame.FlipReset(fr);
     }
-    if (*show_stickDirection) {
+    if (show_stickDirection) {
         frame.FlipDirection();
     }
-    if (!visualize_start_point || !start_point) return;
-    if (!*visualize_start_point) return;
-    switch (*startpoint_mode) {
-        case PIN:
-            frame.StartPoint1(*start_point);
-            break;
-        case LINESPHERE:
-            frame.StartPoint2(*start_point);
-            break;
-        case DOT:
-            frame.StartPoint3(*start_point);
-            break;
-        case BRUSH:
-            frame.StartPoint4(*start_point);
-            break;
-        default:
-            frame.StartPoint1(*start_point);
-            break;
+    if (visualize_start_point) {
+        switch (startpoint_mode) {
+            case PIN:
+                frame.StartPoint1(start_point);
+                break;
+            case LINESPHERE:
+                frame.StartPoint2(start_point);
+                break;
+            case DOT:
+                frame.StartPoint3(start_point);
+                break;
+            case BRUSH:
+                frame.StartPoint4(start_point);
+                break;
+            default:
+                frame.StartPoint1(start_point);
+                break;
+        }
     }
     
 }
@@ -224,13 +244,13 @@ void RL_Paint::DeleteTrailing(int max) {
 
 void RL_Paint::AddDrawPoint(int startPoint, int mode) {
     CarWrapper car = gameWrapper->GetLocalCar();
-    if (!car || !relative || !points_max) return;
-    Vector v = *relative ? 0 : car.GetLocation();
+    if (!car) return;
+    Vector v = relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);
     switch (mode) {
         case TRAILING:
-            DeleteTrailing(*points_max);
+            DeleteTrailing(points_max);
             points.push_back(rp);
             break;
         case NEVER:
@@ -238,7 +258,7 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
                 points.push_back(rp);
             break;
         case RESET:
-            if ((int)points.size() > *points_max) {
+            if ((int)points.size() > points_max) {
                 this->ClearPoints();
             }
             points.push_back(rp);
@@ -252,17 +272,15 @@ void RL_Paint::AddDrawPoint(int startPoint, int mode) {
             }
             break;
         default:
-            DeleteTrailing(*points_max);
+            DeleteTrailing(points_max);
             points.push_back(rp);
     };
 }
 
 void RL_Paint::NewBallHitPos(Vector hitLocation) {
-    if (!show_ballhits || !*show_ballhits) return;
     points_ballhit.push_back(hitLocation);
 }
 void RL_Paint::NewFlipResetPos() {
-    if (!show_flipreset || !*show_flipreset) return;
     ServerWrapper game = gameWrapper->GetGameEventAsServer();
     if (!game) return;
     Vector ballpos = game.GetBall().GetTrajectoryStartLocation();
@@ -276,5 +294,6 @@ void RL_Paint::Freeze(Vector v) {
 
     car.SetLocation(v);
     car.SetVelocity(0);
+    car.SetAngularVelocity(Vector(0,0,0),false);
     car.SetRotation(0);
 }

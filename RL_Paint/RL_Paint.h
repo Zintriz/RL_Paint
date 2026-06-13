@@ -27,10 +27,11 @@ struct CarHitBallParams {
 class RL_Paint : public BakkesMod::Plugin::BakkesModPlugin
 {
 public:
-	
-	virtual void onLoad();
-	virtual void onUnload();
+	bool enabled = true;
+	void onLoad() override;
+	void onUnload() override;
 	void LoadHooks();
+	void LoadCvars();
 	void Render(CanvasWrapper canvas);
 
 	void ClearPoints();	
@@ -52,20 +53,16 @@ public:
 	std::vector<Rotator> points_rotation;
 
 
-	std::shared_ptr<bool> enabled;
+	int points_max = 120; //134 points is a circle
+	int mode = TRAILING;
+	bool relative = true;
+	bool show_ballhits = false;
+	bool show_flipreset = false;
+	bool show_stickDirection = false;
 
-	std::shared_ptr<int> points_max; //134 points is a circle
-	std::shared_ptr<int> mode;
-	std::shared_ptr<bool> relative;
-	std::shared_ptr<bool> show_ballhits;
-	std::shared_ptr<bool> show_flipreset;
-	std::shared_ptr<bool> show_stickDirection;
-
-
-
-	std::shared_ptr<int> start_point;
-	std::shared_ptr<bool> visualize_start_point;
-	std::shared_ptr<int> startpoint_mode;
+	int start_point = 80;
+	bool visualize_start_point = false;
+	int startpoint_mode = PIN;
 
 
 private:
