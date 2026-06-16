@@ -6,7 +6,7 @@
 #define EVENT_EventPerformedFlipReset "Function TAGame.Car_TA.EventPerformedFlipReset"
 #define EVENT_Destroyed "Function TAGame.GameEvent_Soccar_TA.Destroyed"
 #define EVENT_BeginState "Function GameEvent_Soccar_TA.Countdown.BeginState"
-
+#define EVENT_SetFocusActor "Function TAGame.Camera_Replay_TA.SetFocusActor"
 
 
 BAKKESMOD_PLUGIN(RL_Paint, "RL_Paint", "0.0.6", PLUGINTYPE_FREEPLAY)
@@ -125,6 +125,7 @@ void RL_Paint::LoadHooks()
 
     gameWrapper->HookEvent(EVENT_EventPostPhysicsStep,
         [this](std::string eventName) {
+            if (!gameWrapper->IsInGame() && !gameWrapper->IsInReplay()) return;
             this->AddDrawPoint(start_point, mode);
         });
     gameWrapper->HookEvent(EVENT_EventPerformedFlipReset,
@@ -141,6 +142,20 @@ void RL_Paint::LoadHooks()
         [this](std::string eventName) {
             this->ClearPoints();
         });
+    gameWrapper->HookEvent(EVENT_SetFocusActor,
+        [this](std::string eventName) {
+            this->ClearPoints();
+        });
+    //gameWrapper->HookEventWithCallerPost<SpectatorHUDWrapper>("Function TAGame.GFxHUD_Spectator_TA.GetFocusCar",
+    //    [this](SpectatorHUDWrapper caller, void* params, std::string eventName) {
+    //        replaycar_name = caller.GetFocusCar().GetOwnerName();
+    //    });
+    //gameWrapper->HookEventWithCaller<SpectatorHUDWrapper>("Function TAGame.GFxHUD_Spectator_TA.GetFocusCar",
+    //    [this](SpectatorHUDWrapper caller, void* params, std::string eventname) {
+    //        this->Log(eventname);
+    //        //replaycar_name = caller.GetOwnerName();
+
+    //    });
     gameWrapper->RegisterDrawable(
         [this](CanvasWrapper canvas) {
             Render(canvas);
@@ -160,7 +175,7 @@ void RL_Paint::GetParams(void* p, int n) {
     }
 }
 void RL_Paint::ClearPoints() {
-    this->Log("Clearing Points");
+    //this->Log("Clearing Points");
     points.clear();
     points_flipreset.clear();
     points_ballhit.clear();
@@ -175,12 +190,24 @@ bool RL_Paint::IsValidGameState()
     if (game.IsNull()) {
         return false;
     }
-    if (gameWrapper->IsPaused()) return false;
+    if (ingame == 1 && gameWrapper->IsPaused()) return false;
     return true;
 }
 
+//Function ProjectX.Camera_X.OnViewTargetChanged
+//Function TAGame.CameraState_BallCam_TA.ChooseTarget(11)
+//Function TAGame.CameraState_BallCam_TA.FindBestTarget(11)
+//Function TAGame.CameraState_BallCam_TA.SetTarget(22)
+//Function TAGame.CameraState_Car_TA.BeginCameraState(11)
+//Function TAGame.CameraState_TA.BeginCameraState(11)
+//Function TAGame.Camera_TA.EventCameraTargetChanged(11)
+//Function TAGame.Camera_TA.OnViewTargetChanged(11)
+//Function TAGame.GFxHUD_Spectator_TA.CycleFocus(11)
+//Function TAGame.TargetFinder_TA.CanUseTarget(11)
+//Function TAGame.TargetFinder_TA.FindBestTarget(11)
 
 void RL_Paint::Render(CanvasWrapper canvas) {
+
     canvas.SetColor(colors);
     canvas.DrawString("RL_paint enabled");
     if (!IsValidGameState())
@@ -188,7 +215,8 @@ void RL_Paint::Render(CanvasWrapper canvas) {
     CameraWrapper camera = gameWrapper->GetCamera();
     if (camera.IsNull()) return;
     Vector cameraLocation = camera.GetLocation();
-    CarWrapper car = gameWrapper->GetLocalCar();
+    CarWrapper car = GetCar();
+    
     if (!car || !&canvas ||  !&camera)
         return; // check pointers
 
@@ -241,9 +269,31 @@ void RL_Paint::DeleteTrailing(int max) {
     }
 }
 
+CarWrapper RL_Paint::GetCar() {
+    if (gameWrapper->IsInReplay()) {
+        ReplayServerWrapper game = gameWrapper->GetGameEventAsReplay();
+        int index = 1;
+        Vector a;
+        Vector b = game.GetViewTarget().GetLocation();
+        
+        for (auto car : game.GetCars()) {
+            a = car.GetLocation();
+
+            if(a.X == b.X && a.Y == b.Y && a.Z == b.Z) {
+                return car;
+            }
+         
+        }
+        //if (game.GetCars().Count() < 2) return gameWrapper->GetLocalCar(); // make sure that it is atleast 2 players
+        //this->Log(std::format("{}{}", game.GetCars().Get(index).GetLocation().X, game.GetViewTarget().GetLocation().X));
+        return game.GetCars().Get(index);
+    }
+    return gameWrapper->GetLocalCar();
+}
 void RL_Paint::AddDrawPoint(int startPoint, int mode) {
-    CarWrapper car = gameWrapper->GetLocalCar();
+    CarWrapper car = GetCar();
     if (!car) return;
+    //this->Log(car.GetOwnerName());
     Vector v = relative ? 0 : car.GetLocation();
     Rotator r = car.GetRotation();
     Vector rp = Draw::RotatePointWithCar(Vector((float)startPoint, 0, 0), v, r);

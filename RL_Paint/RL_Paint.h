@@ -3,7 +3,7 @@
 #include "Objects/Line.h"
 #include "Objects/Sphere.h"
 #include "Objects/Frustum.h"
-
+//#include "bakkesmod/wrappers/spectatorhudwrapper.h"
 enum modes
 {
 	TRAILING,
@@ -44,6 +44,8 @@ public:
 	bool IsValidGameState();
 	bool HasResetIntervalElapsed();
 	void AddDrawPoint(int startPoint, int mode);
+	CarWrapper GetCar();
+
 	void Freeze(Vector v);
 
 	std::vector<Vector> points;
@@ -51,7 +53,7 @@ public:
 	std::vector<Vector> points_ballhit;
 
 	std::vector<Rotator> points_rotation;
-
+	std::string replaycar_name;
 
 	int points_max = 120; //134 points is a circle
 	int mode = TRAILING;
